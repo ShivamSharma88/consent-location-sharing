@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Consent Location Sharing</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="auth-shell">
+    <section class="auth-card">
+      <div class="brand-box">
+        <h1>📍 Consent Location Sharing</h1>
+        <p>Privacy-first, opt-in location sharing for trusted contacts.</p>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="login">Login</button>
+        <button class="tab" data-tab="register">Register</button>
+      </div>
+
+      <div id="login-panel" class="panel active">
+        <form id="login-form">
+          <label>
+            Email
+            <input type="email" id="login-email" name="email" required />
+          </label>
+          <label>
+            Password
+            <input type="password" id="login-password" name="password" required />
+          </label>
+          <button type="submit">Login</button>
+        </form>
+      </div>
+
+      <div id="register-panel" class="panel">
+        <form id="register-form">
+          <label>
+            Full Name
+            <input type="text" id="register-name" name="name" required />
+          </label>
+          <label>
+            Email
+            <input type="email" id="register-email" name="email" required />
+          </label>
+          <label>
+            Password
+            <input type="password" id="register-password" name="password" required />
+          </label>
+          <button type="submit">Create Account</button>
+        </form>
+      </div>
+
+      <div id="message" class="message"></div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

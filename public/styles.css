@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard | Consent Location Sharing</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="dashboard-body">
+  <div class="dashboard-shell">
+    <aside class="sidebar">
+      <h2>Secure Share</h2>
+      <nav>
+        <button class="nav-button active" data-view="overview">Overview</button>
+        <button class="nav-button" data-view="contacts">Trusted Contacts</button>
+        <button class="nav-button" data-view="locations">Locations</button>
+      </nav>
+      <button id="logout-btn" class="logout-btn">Logout</button>
+    </aside>
+
+    <main class="dashboard-main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Dashboard</p>
+          <h1 id="user-name">Loading...</h1>
+        </div>
+        <label class="switch-wrap">
+          <span>Location sharing</span>
+          <input id="share-toggle" type="checkbox" />
+          <span class="slider"></span>
+        </label>
+      </header>
+
+      <section id="overview" class="panel-view active">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="label">Trusted contacts</span>
+            <strong id="contact-count">0</strong>
+          </div>
+          <div class="stat-card">
+            <span class="label">Location updates</span>
+            <strong id="location-count">0</strong>
+          </div>
+          <div class="stat-card">
+            <span class="label">Last shared</span>
+            <strong id="last-update">—</strong>
+          </div>
+        </div>
+
+        <div class="action-card">
+          <h3>Consent-based sharing</h3>
+          <p>
+            Share your location only after you explicitly approve it. You can stop sharing at any time.
+          </p>
+          <button id="consent-share-btn" class="primary-btn">I consent and share my location</button>
+          <button id="stop-share-btn" class="secondary-btn hidden">Stop sharing</button>
+        </div>
+      </section>
+
+      <section id="contacts" class="panel-view">
+        <div class="card">
+          <h3>Add Trusted Contact</h3>
+          <form id="contact-form" class="mini-form">
+            <input type="text" id="contact-name" placeholder="Contact name" required />
+            <input type="tel" id="contact-phone" placeholder="Phone" />
+            <input type="email" id="contact-email" placeholder="Email" />
+            <button type="submit" class="primary-btn">Add contact</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h3>Trusted Contacts</h3>
+          <ul id="contact-list" class="list"></ul>
+        </div>
+      </section>
+
+      <section id="locations" class="panel-view">
+        <div class="card">
+          <h3>Location History</h3>
+          <ul id="location-list" class="list"></ul>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,251 +1,254 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Consent-Based Location Sharing</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+const express = require("express");
+const fs = require("fs");
+const path = require("path");
+const bcrypt = require("bcryptjs");
+const session = require("express-session");
+const { randomUUID } = require("crypto");
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+const DATA_DIR = path.join(__dirname, "data");
+const STORE_PATH = path.join(DATA_DIR, "store.json");
+
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+if (!fs.existsSync(STORE_PATH)) {
+  fs.writeFileSync(STORE_PATH, JSON.stringify({ users: [], contacts: [], locations: [] }, null, 2));
+}
+
+app.use(express.json());
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "consent-location-secret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax"
     }
+  })
+);
 
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 20px;
-    }
+app.use(express.static(path.join(__dirname, "public")));
 
-    .container {
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-      padding: 40px;
-      max-width: 500px;
-      width: 100%;
-    }
+function readStore() {
+  const raw = fs.readFileSync(STORE_PATH, "utf8");
+  return JSON.parse(raw);
+}
 
-    h1 {
-      color: #333;
-      margin-bottom: 10px;
-      font-size: 28px;
-    }
+function writeStore(store) {
+  fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2));
+}
 
-    .subtitle {
-      color: #666;
-      font-size: 14px;
-      margin-bottom: 30px;
-      line-height: 1.5;
-    }
+function sanitizeUser(user) {
+  if (!user) return null;
+  const { password, ...safeUser } = user;
+  return safeUser;
+}
 
-    .info-box {
-      background: #f0f4ff;
-      border-left: 4px solid #667eea;
-      padding: 15px;
-      margin-bottom: 25px;
-      border-radius: 4px;
-      font-size: 14px;
-      color: #555;
-      line-height: 1.6;
-    }
+function requireAuth(req, res, next) {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Unauthorized. Please log in first." });
+  }
+  next();
+}
 
-    button {
-      width: 100%;
-      padding: 14px 20px;
-      margin-top: 15px;
-      cursor: pointer;
-      border: none;
-      border-radius: 6px;
-      font-size: 16px;
-      font-weight: 600;
-      transition: all 0.3s ease;
-    }
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", message: "Consent-based location app is running." });
+});
 
-    #consentBtn {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-    }
+app.get("/api/session", (req, res) => {
+  if (!req.session.userId) {
+    return res.json({ authenticated: false });
+  }
 
-    #consentBtn:hover:not(:disabled) {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-    }
+  const store = readStore();
+  const user = store.users.find((item) => item.id === req.session.userId);
 
-    #stopBtn {
-      background: #e74c3c;
-      color: white;
-      display: none;
-    }
+  if (!user) {
+    req.session.destroy();
+    return res.json({ authenticated: false });
+  }
 
-    #stopBtn:hover:not(:disabled) {
-      background: #c0392b;
-      transform: translateY(-2px);
-    }
+  return res.json({ authenticated: true, user: sanitizeUser(user) });
+});
 
-    #stopBtn.show {
-      display: block;
-    }
+app.post("/api/register", async (req, res) => {
+  const { name, email, password } = req.body;
 
-    #status {
-      margin-top: 20px;
-      padding: 15px;
-      border-radius: 6px;
-      min-height: 20px;
-      font-size: 14px;
-      line-height: 1.5;
-    }
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: "Name, email, and password are required." });
+  }
 
-    #status.success {
-      background: #d4edda;
-      color: #155724;
-      border: 1px solid #c3e6cb;
-    }
+  const store = readStore();
+  const existingUser = store.users.find(
+    (user) => user.email.toLowerCase() === String(email).toLowerCase()
+  );
 
-    #status.error {
-      background: #f8d7da;
-      color: #721c24;
-      border: 1px solid #f5c6cb;
-    }
+  if (existingUser) {
+    return res.status(409).json({ error: "An account with this email already exists." });
+  }
 
-    #status.info {
-      background: #d1ecf1;
-      color: #0c5460;
-      border: 1px solid #bee5eb;
-    }
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const newUser = {
+    id: randomUUID(),
+    name,
+    email: email.toLowerCase(),
+    password: hashedPassword,
+    sharingEnabled: false,
+    createdAt: new Date().toISOString()
+  };
 
-    .location-data {
-      background: #f9f9f9;
-      border: 1px solid #ddd;
-      padding: 15px;
-      border-radius: 6px;
-      margin-top: 15px;
-      font-size: 13px;
-      font-family: monospace;
-    }
+  store.users.push(newUser);
+  writeStore(store);
 
-    .location-data div {
-      margin: 8px 0;
-      word-break: break-all;
-    }
+  req.session.userId = newUser.id;
 
-    .label {
-      font-weight: 600;
-      color: #333;
-    }
+  return res.status(201).json({
+    message: "Registration successful.",
+    user: sanitizeUser(newUser)
+  });
+});
 
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>📍 Location Sharing</h1>
-    <p class="subtitle">Share your live location with explicit consent only</p>
+app.post("/api/login", async (req, res) => {
+  const { email, password } = req.body;
 
-    <div class="info-box">
-      ✓ This app only shares your location if you explicitly approve it<br>
-      ✓ You can stop sharing anytime with the stop button<br>
-      ✓ Your location is only sent to the server after you consent
-    </div>
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email and password are required." });
+  }
 
-    <button id="consentBtn">✓ I consent and want to share my location</button>
-    <button id="stopBtn" class="show">✗ Stop sharing my location</button>
+  const store = readStore();
+  const user = store.users.find(
+    (item) => item.email.toLowerCase() === String(email).toLowerCase()
+  );
 
-    <div id="status"></div>
-  </div>
+  if (!user) {
+    return res.status(401).json({ error: "Invalid email or password." });
+  }
 
-  <script>
-    const consentBtn = document.getElementById("consentBtn");
-    const stopBtn = document.getElementById("stopBtn");
-    const statusDiv = document.getElementById("status");
+  const isPasswordValid = await bcrypt.compare(password, user.password);
+  if (!isPasswordValid) {
+    return res.status(401).json({ error: "Invalid email or password." });
+  }
 
-    let consentGiven = false;
-    let watchId = null;
+  req.session.userId = user.id;
+  return res.json({
+    message: "Login successful.",
+    user: sanitizeUser(user)
+  });
+});
 
-    function updateStatus(message, type = "info") {
-      statusDiv.innerText = message;
-      statusDiv.className = type;
-    }
+app.post("/api/logout", (req, res) => {
+  req.session.destroy(() => {
+    res.json({ message: "Logged out successfully." });
+  });
+});
 
-    consentBtn.addEventListener("click", () => {
-      if (!navigator.geolocation) {
-        updateStatus("❌ Geolocation is not supported on this device.", "error");
-        return;
-      }
+app.get("/api/contacts", requireAuth, (req, res) => {
+  const store = readStore();
+  const contacts = store.contacts.filter((contact) => contact.userId === req.session.userId);
+  return res.json(contacts);
+});
 
-      consentGiven = true;
-      consentBtn.style.display = "none";
-      stopBtn.classList.add("show");
+app.post("/api/contacts", requireAuth, (req, res) => {
+  const { name, phone, email } = req.body;
 
-      updateStatus("📍 Requesting location access... Please allow location permission when prompted.", "info");
+  if (!name || (!phone && !email)) {
+    return res.status(400).json({ error: "Contact name and at least one contact method are required." });
+  }
 
-      watchId = navigator.geolocation.watchPosition(
-        async (position) => {
-          const payload = {
-            userId: "user_" + Math.random().toString(36).substr(2, 9),
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            consentGiven: true,
-            consentTimestamp: new Date().toISOString()
-          };
+  const store = readStore();
+  const newContact = {
+    id: randomUUID(),
+    userId: req.session.userId,
+    name,
+    phone: phone || "",
+    email: email || "",
+    createdAt: new Date().toISOString()
+  };
 
-          try {
-            const response = await fetch("/api/location", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload)
-            });
+  store.contacts.push(newContact);
+  writeStore(store);
 
-            if (response.ok) {
-              const data = await payload;
-              updateStatus(
-                `✓ Location shared successfully!\nLatitude: ${payload.latitude.toFixed(6)}\nLongitude: ${payload.longitude.toFixed(6)}\nAccuracy: ${payload.accuracy.toFixed(2)}m`,
-                "success"
-              );
-            } else {
-              updateStatus("❌ Failed to share location. Please try again.", "error");
-            }
-          } catch (error) {
-            updateStatus("❌ Error sending location: " + error.message, "error");
-          }
-        },
-        (error) => {
-          let errorMsg = "Location access was denied.";
-          if (error.code === 1) errorMsg = "Permission denied. Please enable location access in your browser settings.";
-          if (error.code === 2) errorMsg = "Position unavailable. Please check your GPS/network connection.";
-          if (error.code === 3) errorMsg = "Location request timed out.";
+  return res.status(201).json(newContact);
+});
 
-          updateStatus("❌ " + errorMsg, "error");
-          consentGiven = false;
-          consentBtn.style.display = "block";
-          stopBtn.classList.remove("show");
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
-        }
-      );
-    });
+app.delete("/api/contacts/:id", requireAuth, (req, res) => {
+  const store = readStore();
+  const index = store.contacts.findIndex(
+    (contact) => contact.id === req.params.id && contact.userId === req.session.userId
+  );
 
-    stopBtn.addEventListener("click", () => {
-      if (watchId) {
-        navigator.geolocation.clearWatch(watchId);
-      }
+  if (index === -1) {
+    return res.status(404).json({ error: "Contact not found." });
+  }
 
-      consentGiven = false;
-      stopBtn.classList.remove("show");
-      consentBtn.style.display = "block";
-      updateStatus("✓ Location sharing stopped. Your privacy is protected.", "success");
-    });
-  </script>
-</body>
-</html>
+  const [removedContact] = store.contacts.splice(index, 1);
+  writeStore(store);
+
+  return res.json({ message: "Contact removed.", contact: removedContact });
+});
+
+app.get("/api/locations", requireAuth, (req, res) => {
+  const store = readStore();
+  const locations = store.locations
+    .filter((location) => location.userId === req.session.userId)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  return res.json(locations);
+});
+
+app.post("/api/location", requireAuth, (req, res) => {
+  const { latitude, longitude, accuracy, consentGiven, consentTimestamp } = req.body;
+
+  if (!consentGiven || latitude === undefined || longitude === undefined) {
+    return res.status(400).json({ error: "Explicit consent and valid coordinates are required." });
+  }
+
+  const store = readStore();
+  const locationRecord = {
+    id: randomUUID(),
+    userId: req.session.userId,
+    latitude: Number(latitude),
+    longitude: Number(longitude),
+    accuracy: Number(accuracy || 0),
+    consentGiven: true,
+    consentTimestamp: consentTimestamp || new Date().toISOString(),
+    createdAt: new Date().toISOString()
+  };
+
+  store.locations.push(locationRecord);
+  writeStore(store);
+
+  return res.status(201).json({ message: "Location shared successfully.", location: locationRecord });
+});
+
+app.post("/api/share-settings", requireAuth, (req, res) => {
+  const { sharingEnabled } = req.body;
+  const store = readStore();
+  const user = store.users.find((item) => item.id === req.session.userId);
+
+  if (!user) {
+    return res.status(404).json({ error: "User not found." });
+  }
+
+  user.sharingEnabled = !!sharingEnabled;
+  writeStore(store);
+
+  return res.json({ message: "Sharing settings updated.", user: sanitizeUser(user) });
+});
+
+app.get("/dashboard", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "dashboard.html"));
+});
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+app.listen(PORT, () => {
+  console.log(`Consent-based location app running on http://localhost:${PORT}`);
+});

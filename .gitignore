@@ -1,11 +1,47 @@
-node_modules/
-.env
-.DS_Store
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.vscode/
-.idea/
-dist/
-build/
+# Consent Location Sharing
+
+This project is a consent-based location sharing application built with Node.js and Express. It includes:
+
+- Secure user registration and login
+- Consent-based location sharing
+- Trusted contacts management
+- Dashboard for location history
+- Privacy-first design
+
+## Features
+
+- User login and registration
+- Geolocation capture only after explicit user consent
+- Trusted contact list with phone/email fields
+- Dashboard with stats and location history
+- Stop-sharing button
+- Local session-based authentication
+
+## Tech Stack
+
+- Node.js
+- Express
+- Express Session
+- bcryptjs
+- HTML/CSS/JavaScript
+
+## Getting Started
+
+```bash
+npm install
+npm start
+```
+
+Open the app in your browser:
+
+```bash
+http://localhost:3000
+```
+
+## Important Notice
+
+This app is designed for lawful, consent-based sharing only. It does not collect location silently, and it requires explicit user approval before geolocation is used.
+
+## License
+
+MIT

@@ -1,7 +1,7 @@
 {
   "name": "consent-location-sharing",
-  "version": "1.0.0",
-  "description": "A consent-based location sharing application built with Node.js and Express. Users must explicitly opt-in to share their GPS coordinates.",
+  "version": "2.0.0",
+  "description": "A consent-based location sharing application with login, trusted contacts, and a dashboard.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -13,14 +13,17 @@
     "consent-based",
     "privacy-first",
     "express",
-    "nodejs"
+    "nodejs",
+    "dashboard"
   ],
-  "author": "",
+  "author": "Shivam Sharma",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2"
+    "bcryptjs": "^2.4.3",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.1.4"
   }
 }
