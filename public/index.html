@@ -1,254 +1,60 @@
-const express = require("express");
-const fs = require("fs");
-const path = require("path");
-const bcrypt = require("bcryptjs");
-const session = require("express-session");
-const { randomUUID } = require("crypto");
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Consent Location Sharing</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="auth-shell">
+    <section class="auth-card">
+      <div class="brand-box">
+        <h1>Consent Location Sharing</h1>
+        <p>Privacy-first, opt-in location sharing for trusted contacts.</p>
+      </div>
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-const DATA_DIR = path.join(__dirname, "data");
-const STORE_PATH = path.join(DATA_DIR, "store.json");
+      <div class="tabs">
+        <button class="tab active" data-tab="login">Login</button>
+        <button class="tab" data-tab="register">Register</button>
+      </div>
 
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
+      <div id="login-panel" class="panel active">
+        <form id="login-form">
+          <label>
+            Email
+            <input type="email" id="login-email" name="email" required />
+          </label>
+          <label>
+            Password
+            <input type="password" id="login-password" name="password" required />
+          </label>
+          <button type="submit">Login</button>
+        </form>
+      </div>
 
-if (!fs.existsSync(STORE_PATH)) {
-  fs.writeFileSync(STORE_PATH, JSON.stringify({ users: [], contacts: [], locations: [] }, null, 2));
-}
+      <div id="register-panel" class="panel">
+        <form id="register-form">
+          <label>
+            Full Name
+            <input type="text" id="register-name" name="name" required />
+          </label>
+          <label>
+            Email
+            <input type="email" id="register-email" name="email" required />
+          </label>
+          <label>
+            Password
+            <input type="password" id="register-password" name="password" required />
+          </label>
+          <button type="submit">Create Account</button>
+        </form>
+      </div>
 
-app.use(express.json());
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "consent-location-secret",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      secure: false,
-      sameSite: "lax"
-    }
-  })
-);
+      <div id="message" class="message"></div>
+    </section>
+  </main>
 
-app.use(express.static(path.join(__dirname, "public")));
-
-function readStore() {
-  const raw = fs.readFileSync(STORE_PATH, "utf8");
-  return JSON.parse(raw);
-}
-
-function writeStore(store) {
-  fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2));
-}
-
-function sanitizeUser(user) {
-  if (!user) return null;
-  const { password, ...safeUser } = user;
-  return safeUser;
-}
-
-function requireAuth(req, res, next) {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: "Unauthorized. Please log in first." });
-  }
-  next();
-}
-
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", message: "Consent-based location app is running." });
-});
-
-app.get("/api/session", (req, res) => {
-  if (!req.session.userId) {
-    return res.json({ authenticated: false });
-  }
-
-  const store = readStore();
-  const user = store.users.find((item) => item.id === req.session.userId);
-
-  if (!user) {
-    req.session.destroy();
-    return res.json({ authenticated: false });
-  }
-
-  return res.json({ authenticated: true, user: sanitizeUser(user) });
-});
-
-app.post("/api/register", async (req, res) => {
-  const { name, email, password } = req.body;
-
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: "Name, email, and password are required." });
-  }
-
-  const store = readStore();
-  const existingUser = store.users.find(
-    (user) => user.email.toLowerCase() === String(email).toLowerCase()
-  );
-
-  if (existingUser) {
-    return res.status(409).json({ error: "An account with this email already exists." });
-  }
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const newUser = {
-    id: randomUUID(),
-    name,
-    email: email.toLowerCase(),
-    password: hashedPassword,
-    sharingEnabled: false,
-    createdAt: new Date().toISOString()
-  };
-
-  store.users.push(newUser);
-  writeStore(store);
-
-  req.session.userId = newUser.id;
-
-  return res.status(201).json({
-    message: "Registration successful.",
-    user: sanitizeUser(newUser)
-  });
-});
-
-app.post("/api/login", async (req, res) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required." });
-  }
-
-  const store = readStore();
-  const user = store.users.find(
-    (item) => item.email.toLowerCase() === String(email).toLowerCase()
-  );
-
-  if (!user) {
-    return res.status(401).json({ error: "Invalid email or password." });
-  }
-
-  const isPasswordValid = await bcrypt.compare(password, user.password);
-  if (!isPasswordValid) {
-    return res.status(401).json({ error: "Invalid email or password." });
-  }
-
-  req.session.userId = user.id;
-  return res.json({
-    message: "Login successful.",
-    user: sanitizeUser(user)
-  });
-});
-
-app.post("/api/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.json({ message: "Logged out successfully." });
-  });
-});
-
-app.get("/api/contacts", requireAuth, (req, res) => {
-  const store = readStore();
-  const contacts = store.contacts.filter((contact) => contact.userId === req.session.userId);
-  return res.json(contacts);
-});
-
-app.post("/api/contacts", requireAuth, (req, res) => {
-  const { name, phone, email } = req.body;
-
-  if (!name || (!phone && !email)) {
-    return res.status(400).json({ error: "Contact name and at least one contact method are required." });
-  }
-
-  const store = readStore();
-  const newContact = {
-    id: randomUUID(),
-    userId: req.session.userId,
-    name,
-    phone: phone || "",
-    email: email || "",
-    createdAt: new Date().toISOString()
-  };
-
-  store.contacts.push(newContact);
-  writeStore(store);
-
-  return res.status(201).json(newContact);
-});
-
-app.delete("/api/contacts/:id", requireAuth, (req, res) => {
-  const store = readStore();
-  const index = store.contacts.findIndex(
-    (contact) => contact.id === req.params.id && contact.userId === req.session.userId
-  );
-
-  if (index === -1) {
-    return res.status(404).json({ error: "Contact not found." });
-  }
-
-  const [removedContact] = store.contacts.splice(index, 1);
-  writeStore(store);
-
-  return res.json({ message: "Contact removed.", contact: removedContact });
-});
-
-app.get("/api/locations", requireAuth, (req, res) => {
-  const store = readStore();
-  const locations = store.locations
-    .filter((location) => location.userId === req.session.userId)
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-  return res.json(locations);
-});
-
-app.post("/api/location", requireAuth, (req, res) => {
-  const { latitude, longitude, accuracy, consentGiven, consentTimestamp } = req.body;
-
-  if (!consentGiven || latitude === undefined || longitude === undefined) {
-    return res.status(400).json({ error: "Explicit consent and valid coordinates are required." });
-  }
-
-  const store = readStore();
-  const locationRecord = {
-    id: randomUUID(),
-    userId: req.session.userId,
-    latitude: Number(latitude),
-    longitude: Number(longitude),
-    accuracy: Number(accuracy || 0),
-    consentGiven: true,
-    consentTimestamp: consentTimestamp || new Date().toISOString(),
-    createdAt: new Date().toISOString()
-  };
-
-  store.locations.push(locationRecord);
-  writeStore(store);
-
-  return res.status(201).json({ message: "Location shared successfully.", location: locationRecord });
-});
-
-app.post("/api/share-settings", requireAuth, (req, res) => {
-  const { sharingEnabled } = req.body;
-  const store = readStore();
-  const user = store.users.find((item) => item.id === req.session.userId);
-
-  if (!user) {
-    return res.status(404).json({ error: "User not found." });
-  }
-
-  user.sharingEnabled = !!sharingEnabled;
-  writeStore(store);
-
-  return res.json({ message: "Sharing settings updated.", user: sanitizeUser(user) });
-});
-
-app.get("/dashboard", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "dashboard.html"));
-});
-
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-app.listen(PORT, () => {
-  console.log(`Consent-based location app running on http://localhost:${PORT}`);
-});
+  <script src="/app.js"></script>
+</body>
+</html>
